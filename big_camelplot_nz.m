@@ -1,54 +1,84 @@
-%% This block creates camel diagrams for all moraines and orders them by latitude.
-% Note: because the moraines aren't evenly spaced, the y-axis isn't
-% anything like linear with latitude. Thus, plot some latitude markers
-% occasionally to indicate where we are.
-%
-% Note: this is now kind of way too dense. Too much data.
+%% This block creates camel diagrams for all moraines and orders them by age and latitude.
+% Modified by KP November 2024
 
 clear;
 
-% Reload data
-load sample_data_nz.mat;
+% Load data
+data = readtable('../geochron.xlsx','Sheet', 1);
+save('10be.mat', 'data');
+load 10be.mat;
 
-% Sort by latitude
+%Assign variables
+site_name = table2cell(data(:,8));
+site_lat = cell2mat(table2cell(data(:,2)));
+site_lon = cell2mat(table2cell(data(:,3)));
+age = cell2mat(table2cell(data(:,5)));
+dtint = cell2mat(table2cell(data(:,6))); %internal uncertainty
+dtext = cell2mat(table2cell(data(:,7))); %external uncertainty
 
-ok_is = find(OK == 1);
-ok_lats = site_lat(ok_is);
-[sorted,sortindex] = sort(ok_lats);
+%% Chronologically-ordered plot
+
+
+
+unique_sites = unique(site_name); % Get unique site names
+plotht =1./(length(unique_sites)+4); 
+
+% Initialize a cell array to store camelplot data
+cps = struct('x', {}, 'y', {}, 'name', {});
+
+% Loop to calculate and store camelplot for each site
+for s = 1:length(unique_sites)
+    thisname = unique_sites{s};
+    indices = find(strcmp(site_name, thisname)); % Find indices for this site name
+
+    % Aggregate ages and dtint values for this site name
+    thist = age(indices);
+    thisdt = dtint(indices);
+
+    % Camelplot for each site
+    thiscp = camelplot(thist, thisdt);
+
+    okx = find(thiscp.x > 0);
+    
+    % Store in struct
+    cps(s).x = thiscp.x(okx);
+    cps(s).y = thiscp.y(okx);
+    cps(s).name = thisname;
+end
+
+% Sort by age, sorting cps.x values
+[sortedx, sortIdx]=sort(arrayfun(@(c) c.x(2), cps));
+cps = cps(sortIdx);
+
 
 % Create figure
+
 figure('pos',[440    42   574   760]);
-
-
-plotht =1./(length(ok_lats)+4);
 
 % The following parameter controls how tall the camel plots are in relation
 % to the spacing. Adjust to make it look good.
 
-camelHtScale = 3;
+camelHtScale = 6;
 
 axes()
 
 lastlat = -90;
 
+
+% Plot each camelplot chronologically
+for s = 1:length(unique_sites)
+    thiscp = cps(s);
+    thisbasey = (s + 2) * plotht;
+    thisx = [1 thiscp.x 4e5];
+    thisy = [thisbasey (thiscp.y * (camelHtScale * plotht / max(thiscp.y)) + thisbasey) thisbasey];
+   
+   % Plot entire camel
+    plot(thisx,thisy,'color',[0.4 0.4 0.4]); hold on;
+end
+
 % Define things having to do with ACR and YD
 % ACRmin = 13000; ACRmax = 14700;
 % YDmin = 11700; YDmax = 12900;
-
-for a = 1:length(sortindex)
-    thisi = ok_is(sortindex(a));
-    thisname = site_names{a};
-    thist = all_ages(thisi).t;
-    thisdt = all_ages(thisi).dtint;
-    thiscp = camelplot_all(thist,thisdt);
-    thisbasey = (a+2).*plotht;
-    okx = find(thiscp.x > 0);
-    thisx = [1 thiscp.x(okx) 5e5];
-    thisy = [thisbasey (thiscp.y(okx).*(camelHtScale.*plotht./max(thiscp.y)) + thisbasey) thisbasey];
-
-
-    % Plot entire camel
-    plot(thisx,thisy,'color',[0.4 0.4 0.4]); hold on;
 
     % This commented-out section attempts to color in sections of each
     % camel plot that belongs to the YD or ACR. Also see some commented-out
@@ -68,36 +98,17 @@ for a = 1:length(sortindex)
     % ACRy = [thisy(ACRi) zeros(size(ACRi))+thisbasey thisy(ACRi(1))];
     % patch(ACRx,ACRy,[0.8 1 0.8],'edgecolor',[0.9 1 0.9]);
 
-    % This section plots the latitude periodically in the left margin.
-    % Detect a latitude transition
-    thislat = site_lat(thisi);
-    if (a > 1) && (ceil(lastlat./1) == floor(thislat./1))
-        % Crossed 5-degree bound
-        plat = 1.*ceil(lastlat./1);
-        if plat == 0
-            thistext = '0';
-        elseif plat > 0
-            thistext = [sprintf('%0.0f',plat) ' N'];
-        else
-            thistext = [sprintf('%0.0f',plat) ' S'];
-        end
-        plot([-900 -500],(thisbasey + 0.5*plotht).*[1 1],'k');
-        text(-1000,(thisbasey + 0.5*plotht),thistext,'fontsize',12,'fontname','helvetica','horizontalalignment','right')
-    end
-    drawnow;
-    lastlat = thislat;
-end
-
 
 set(gcf,'color','w')
 set(gca,'box','off')
 set(gca,'ycolor','w')
-set(gca,'xtick',[0:2000:40000])
+set(gca,'xtick',[0:10000:50000])
 %set(gca,'xticklabel',{'0','2','4','6','8','10','12','14','16','18','20','22','24'})
-xlabel('Exposure age (ka)');
-title('LGM and Holocene moraines of the Southern Alps, New Zealand, from 22–40 degrees S')
+xlabel('Exposure age (yrs)');
+title('Summary camelplots for moraines of the Southern Alps, New Zealand')
 tx = get(gca,'xaxis');
-set(tx,'limits',[0 40000])
+tx.Exponent=0;
+set(tx,'limits',[0 50000])
 set(gca,'ylim',[0 1])
 drawnow;
 
@@ -122,27 +133,31 @@ grid on;
 %% This block aggregates data from latitude bins to plot camel diagrams in
 % a correct latitude relationship.
 
+
+% Sort by latitude
+[sorted, sortindex] = sort(site_lat,'descend');
+
 % Define latitude bins
-lats = -40:0.5:-20;
+lats = -46:0.25:-40;
 
 figure('pos',[440    42   574   760]);
 plotht = 1;
-camelHeightScale = 2; % sets height of plots rel to spacing
+camelHeightScale = 1; % sets height of plots rel to spacing
 axes()
-set(gca,'xlim',[-3000 40000],'ylim',[-40 -22]);
+set(gca,'xlim',[-3000 40000],'ylim',[-46 -40]);
 
 for a = 2:length(lats)
     use = find((site_lat >= lats(a-1)) & (site_lat < lats(a)));
     this_t = [];
     this_dt = [];
     for b = 1:length(use)
-        if ~isempty(all_ages(use(b)).t) & isempty(find(all_ages(use(b)).t == 0))
-            this_t = [this_t all_ages(use(b)).t'];
-            this_dt = [this_dt all_ages(use(b)).dtint'];
+        if ~isempty(age(use(b))) & isempty(find(age(use(b)) == 0))
+            this_t = [this_t age(use(b))];
+            this_dt = [this_dt dtint(use(b))];
         end
     end
     if ~isempty(this_t)
-        thiscp = camelplot_all(this_t,this_dt);
+        thiscp = camelplot(this_t,this_dt);
         okx = find(thiscp.x > 0);
         thisx = [1 thiscp.x(okx) 1e6];
         thisy = [lats(a) (thiscp.y(okx).*(camelHeightScale.*plotht./max(thiscp.y)) + lats(a)) lats(a)];
@@ -163,7 +178,7 @@ end
 view(0,90);
 
 % This makes some y-axis labels that are out of the way on the left
-plats = [-40:10:-20];
+plats = [-46:1:-40];
 for a = 1:length(plats)
     text(-400,plats(a),[int2str(plats(a)) '  -'],'fontsize',12,'fontname','helvetica','horizontalalignment','right');
 end
@@ -175,15 +190,16 @@ set(gca,'box','off')
 set(gca,'ycolor','w')
 set(gca,'gridcolor',[0.5 0.2 0.2])
 set(gca,'ygrid','off','xgrid','on')
-set(gca,'xtick',[0:2000:40000])
+set(gca,'xtick',[0:5000:80000])
 %set(gca,'xticklabel',{'0','2','4','6','8','10','12','14','16','18','20','22','24'})
-set(gca,'ytick',[-40:10:-20]);
+set(gca,'ytick',[-46:0.5:-40]);
 set(gca,'yticklabel',{'-60', '-50', '-40', '-30', '-20', '-10', '0', '10', '20', '30', '40', '50', '60', '70'});
 xlabel('Exposure age (ka)');
-title('LGM and Holocene moraines of the American cordillera')
+ylabel('Latitude (°S)');
+title('Moraines of the Southern Alps')
 tx = get(gca,'xaxis');
-set(tx,'limits',[-1 40000])
-set(gca,'ylim',[-40 -20]);
+set(tx,'limits',[-1 70000])
+set(gca,'ylim',[-46 -39]);
 
 
 
