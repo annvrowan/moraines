@@ -86,7 +86,7 @@ disp(strcat("Number of samples = ",num2str(no_samples)))
 
 %% Collect sample data for all samples indentified and put into a cell array
 % Sample name needs to have this format to query the database: '"Barr2007-A-WH-01B"'
-sample_data = cell(no_samples,13);
+sample_data = cell(no_samples,16);
 %Populate the table with the sample name in col1 and the string for cosmo
 %calculator in col2
 for i = 1:no_samples
@@ -107,6 +107,8 @@ toc
 %checked against the original names in col1 as q quick check that the data
 %is collected as expected. If the sample is missing, col3 has an error
 %message instead.
+
+% Calculate with global production rate (default)
 for i  = 1:no_samples
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
@@ -123,13 +125,63 @@ for i  = 1:no_samples
         sample_data{i,12} = d.sites.what_1(i);
         sample_data{i,13} = d.sites.shielding(i);
         pause(0.1)
+        disp(strcat("Sample", num2str(i)))
     end
 end
 toc
 
+disp("Exposure ages using global production rate calculated")
+
+%% Local production rate
+
+% Get calibration dataset from the calibration website
+cal_page_html = webread('https://version2.ice-d.org/production%20rate%20calibration%20data/site/MACAULAY/');
+
+% Scrape the formatted text block out of the HTML
+startindex = strfind(cal_page_html,'<!-- begin v3 --><pre>') + length('<!-- begin v3 --><pre>');
+endindex = strfind(cal_page_html,'</pre><!-- end v3 -->') - 1;
+cal_input_text = cal_page_html(startindex:endindex);
+
+%Make sure to only have one nuclide in the input text!
+lines = splitlines(cal_input_text);
+filtered_lines = lines(~contains(lines, 'C-14')); % Filter C-14 out 
+filtered_text = strjoin(filtered_lines, '\n');
+
+%Calibration calculator
+url = "http://hess.ess.washington.edu/cgi-bin/matweb";
+cal_xml_result = webread(url,'mlmfile','cal_input_v3','reportType','XML','plotFlag','no','text_block',filtered_text);
+
+temp = regexp(cal_xml_result,['<nuclide>(.*?)</nuclide>'],'tokens');
+nuclide_string = temp{1}{1};
+
+% Get calibrated production rate parameters for LSDn scaling method
+temp = regexp(cal_xml_result,['<summary_value_LSDn>(.*?)</summary_value_LSDn>'],'tokens');
+value_LSDn_string = temp{1}{1};
+temp = regexp(cal_xml_result,['<summary_uncert_LSDn>(.*?)</summary_uncert_LSDn>'],'tokens');
+uncert_LSDn_string = temp{1}{1};
+
+disp("Returned calibrated production rate parameters")
+
+%% Calculate exposure ages using local production rate parameters
+
+for i  = 1:no_samples
+    if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
+    else
+        [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data{i,2},nuclide_string,value_LSDn_string,uncert_LSDn_string);
+        sample_data{i,14} = LSDn_age;
+        sample_data{i,15} = LSDn_int;
+        sample_data{i,16} = LSDn_ext;
+        pause(0.1)
+        disp(strcat("Sample", num2str(i)))
+    end
+end
+
+disp("Exposure ages using local production rate calculated")
+%%
+
 %format the results into a Matlab table and save
-sample_data = cell2table(sample_data,'VariableNames',{'name','cosmocalcinput','name2','lat_dd','lon_dd','elv_m','LSDn_age','LSDn_int','LSDn_ext','site','what_site','what_sample','shielding'});
-%save('data_SI_moraine_shielding','sample_data')
+sample_data = cell2table(sample_data,'VariableNames',{'name','cosmocalcinput','name2','lat_dd','lon_dd','elv_m','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','site','what_site','what_sample','shielding','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc'});
+save('sample_data','sample_data')
 
 
 
