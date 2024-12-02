@@ -110,7 +110,7 @@ toc
 for i  = 1:no_samples
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
-        [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator_cal(sample_data{i,2});
+        [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator(sample_data{i,2});
         sample_data{i,3} = name;
         sample_data{i,4} = d.sites.lat_DD(i);
         sample_data{i,5} = d.sites.lon_DD(i);
