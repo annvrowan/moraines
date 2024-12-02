@@ -48,7 +48,7 @@
 
 %Created by Greg Balco
 %Last modifed by Ann Rowan on 10/01/24
-
+%Last modified by Karlijn Ploeg on 08/02/2024
 
 clear all
 close all
@@ -70,10 +70,11 @@ dbc = database('iced','reader','beryllium-10','Vendor','MySQL','Server','localho
 
 %% Query ICED to return a list of sample names
 %Make a MySQL query to return a list of all samples from moraines in the Southern Alps
-q1 = ['select base_site.short_name, base_sample.name, base_sample.lon_DD,base_sample.lat_DD,base_sample.elv_m, base_continent.name ' ...
+q1 = ['select base_site.short_name, base_sample.name, base_sample.lon_DD,base_sample.lat_DD,base_sample.elv_m,base_sample.shielding,base_continent.name, base_site.what, base_sample.what ' ...
     'from base_sample join base_site on base_site.id = base_sample.site_id join base_continent on base_site.continent_id = base_continent.id ' ...
-    'where (base_site.range like "%New Zealand, Southern Alps%") ' ...
-    'and base_site.what like "%moraine%"'];
+    'WHERE (base_sample.lat_DD < -40 AND base_sample.lat_DD > -48)'... 
+    'AND (base_sample.lon_DD < 175 AND base_sample.lon_DD > 166)'... 
+    'and base_site.what like "%oraine%"'];
 d.sites = fetch(dbc,q1);
 
 %Put the returned sample names into a cell array called name_list. This is
@@ -85,7 +86,7 @@ disp(strcat("Number of samples = ",num2str(no_samples)))
 
 %% Collect sample data for all samples indentified and put into a cell array
 % Sample name needs to have this format to query the database: '"Barr2007-A-WH-01B"'
-sample_data = cell(no_samples,9);
+sample_data = cell(no_samples,13);
 %Populate the table with the sample name in col1 and the string for cosmo
 %calculator in col2
 for i = 1:no_samples
@@ -99,6 +100,7 @@ end
 close(dbc);
 toc
 
+
 %% Send sample data to cosmo calculator and return age and age errors
 %This part of the script calls a different script; cosmo_calculator
 %The script returns the sample names into col3 of the table so they can be
@@ -108,7 +110,7 @@ toc
 for i  = 1:no_samples
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
-        [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator(sample_data{i,2});
+        [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator_cal(sample_data{i,2});
         sample_data{i,3} = name;
         sample_data{i,4} = d.sites.lat_DD(i);
         sample_data{i,5} = d.sites.lon_DD(i);
@@ -116,15 +118,18 @@ for i  = 1:no_samples
         sample_data{i,7} = LSDn_age;
         sample_data{i,8} = LSDn_int;
         sample_data{i,9} = LSDn_ext;
+        sample_data{i,10} = d.sites.short_name(i);
+        sample_data{i,11} = d.sites.what(i);
+        sample_data{i,12} = d.sites.what_1(i);
+        sample_data{i,13} = d.sites.shielding(i);
         pause(0.1)
     end
 end
 toc
 
 %format the results into a Matlab table and save
-sample_data = cell2table(sample_data,'VariableNames',{'name','cosmocalcinput','name2','lat_dd','lon_dd','elv_m','LSDn_age','LSDn_int','LSDn_ext'});
-save('sample_data','sample_data')
-
+sample_data = cell2table(sample_data,'VariableNames',{'name','cosmocalcinput','name2','lat_dd','lon_dd','elv_m','LSDn_age','LSDn_int','LSDn_ext','site','what_site','what_sample','shielding'});
+%save('data_SI_moraine_shielding','sample_data')
 
 
 
