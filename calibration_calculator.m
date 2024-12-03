@@ -1,4 +1,4 @@
-function [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data,nuclide_string,value_LSDn_string,uncert_LSDn_string)
+function [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data,nuclide_string,value_St_string,uncert_St_string,value_Lm_string,uncert_Lm_string,value_LSDn_string,uncert_LSDn_string)
 
 %A script to generate local prodution rate from calibration data, send sample data to the adjusted online cosmo calculator and collect the
 %results. Sample_data is the sample info returned from ICE-D by the script
@@ -22,12 +22,8 @@ function [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data,
 %size(a);
 %if a < 14; return; end
 
-sample_data=string(sample_data);
-
-%Format sample data for input to cosmo calculator
 text = regexprep(sample_data,':','\t');
 
-%%
 % Send data to cosmo calculator with non-default production rate parameters
 url = "https://hess.ess.washington.edu/cgi-bin/matweb";
 data = webread(url,'mlmfile','age_input_v3','reportType','XML','resultType','long','plotFlag','no',...
@@ -35,6 +31,8 @@ data = webread(url,'mlmfile','age_input_v3','reportType','XML','resultType','lon
     'trace_string','nothing here but this is required',...
     'calib_name','nothing here either but this is required too',...
     'nuclide_name',nuclide_string,...
+    'P_St',value_St_string,'delP_St',uncert_St_string,...
+    'P_Lm',value_Lm_string,'delP_Lm',uncert_Lm_string,...
     'P_LSDn',value_LSDn_string,'delP_LSDn',uncert_LSDn_string);
 
 %Load the parser and parse string from data returned from cosmo calculator
