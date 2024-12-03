@@ -109,7 +109,7 @@ toc
 %message instead.
 
 % Calculate with global production rate (default)
-for i  = 1:no_samples
+for i  = 1:1
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
         [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator(sample_data{i,2});
@@ -164,10 +164,14 @@ disp("Returned calibrated production rate parameters")
 
 %% Calculate exposure ages using local production rate parameters
 
-for i  = 1:no_samples
+%load sample_data_global.mat;
+%sample_data = table2cell(sample_data);
+
+%%
+for i  = 1:length(sample_data)
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
-        [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data{i,2},nuclide_string,value_LSDn_string,uncert_LSDn_string);
+        [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data{i,2},nuclide_string,value_St_string,uncert_St_string,value_Lm_string,uncert_Lm_string,value_LSDn_string,uncert_LSDn_string);
         sample_data{i,14} = LSDn_age;
         sample_data{i,15} = LSDn_int;
         sample_data{i,16} = LSDn_ext;
