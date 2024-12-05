@@ -132,6 +132,13 @@ toc
 
 disp("Exposure ages using global production rate calculated")
 
+
+
+
+
+
+
+
 %% Local production rate
 
 % Get calibration dataset from the calibration website
@@ -155,12 +162,23 @@ temp = regexp(cal_xml_result,['<nuclide>(.*?)</nuclide>'],'tokens');
 nuclide_string = temp{1}{1};
 
 % Get calibrated production rate parameters for LSDn scaling method
+temp = regexp(cal_xml_result,['<summary_value_St>(.*?)</summary_value_St>'],'tokens');
+value_St_string = temp{1}{1};
+temp = regexp(cal_xml_result,['<summary_uncert_St>(.*?)</summary_uncert_St>'],'tokens');
+uncert_St_string = temp{1}{1};
+temp = regexp(cal_xml_result,['<summary_value_Lm>(.*?)</summary_value_Lm>'],'tokens');
+value_Lm_string = temp{1}{1};
+temp = regexp(cal_xml_result,['<summary_uncert_Lm>(.*?)</summary_uncert_Lm>'],'tokens');
+uncert_Lm_string = temp{1}{1};
 temp = regexp(cal_xml_result,['<summary_value_LSDn>(.*?)</summary_value_LSDn>'],'tokens');
 value_LSDn_string = temp{1}{1};
 temp = regexp(cal_xml_result,['<summary_uncert_LSDn>(.*?)</summary_uncert_LSDn>'],'tokens');
 uncert_LSDn_string = temp{1}{1};
 
+
 disp("Returned calibrated production rate parameters")
+
+
 
 %% Calculate exposure ages using local production rate parameters
 
