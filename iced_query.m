@@ -77,24 +77,36 @@ q1 = ['select base_site.short_name, base_sample.name, base_sample.lon_DD,base_sa
     'and base_site.what like "%oraine%"'];
 d.sites = fetch(dbc,q1);
 
+%% 
 %Put the returned sample names into a cell array called name_list. This is
 %useful to double check for duplicates or missing values.
 name_list(:,1) = d.sites.name;
+site_list(:,1) = d.sites.short_name;
+unique_sites = unique(site_list,'stable');
+
 no_samples = length(name_list);
+no_sites = length(unique_sites);
+
 %Print number of samples found
 disp(strcat("Number of samples = ",num2str(no_samples)))
+disp(strcat("Number of sites = ",num2str(no_sites)))
+
+% Store sample and site data
+sample_data = cell(no_samples,18);
+site_data = cell(no_sites,8);
 
 %% Collect sample data for all samples indentified and put into a cell array
 % Sample name needs to have this format to query the database: '"Barr2007-A-WH-01B"'
-sample_data = cell(no_samples,16);
-%Populate the table with the sample name in col1 and the string for cosmo
-%calculator in col2
+
+%Populate the table with the site name in col1, sample name in col2 and the string for cosmo
+%calculator in col3
 for i = 1:no_samples
     name = cat(2,'"',name_list{i,1},'"');
     %Make the query to send to ICE-D to return input for cosmo calculator
     q2 = cat(2,['select  concat_ws(":",base_sample.name,base_sample.lat_DD,base_sample.lon_DD,base_sample.elv_m,"std",base_sample.thick_cm,base_sample.density,base_sample.shielding,"0 2010;",base_sample.name,"Be-10 quartz",_be10_al26_quartz.N10_atoms_g,_be10_al26_quartz.delN10_atoms_g,_be10_al26_quartz.Be10_std,";") from base_sample join _be10_al26_quartz on base_sample.id = _be10_al26_quartz.sample_id where base_sample.name ='],name);
-    sample_data{i,1} = name;
-    sample_data{i,2} = fetch(dbc,q2,'DataReturnFormat','cellarray');
+    sample_data{i,1} = site_list{i,1};
+    sample_data{i,2} = name;
+    sample_data{i,3} = fetch(dbc,q2,'DataReturnFormat','cellarray');
 end
 %Now close the database connection
 close(dbc);
@@ -108,33 +120,57 @@ toc
 %is collected as expected. If the sample is missing, col3 has an error
 %message instead.
 
+
 % Calculate with global production rate (default)
-for i  = 1:1
-    if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
-    else
-        [name,LSDn_age,LSDn_int,LSDn_ext] = cosmo_calculator(sample_data{i,2});
-        sample_data{i,3} = name;
-        sample_data{i,4} = d.sites.lat_DD(i);
-        sample_data{i,5} = d.sites.lon_DD(i);
-        sample_data{i,6} = d.sites.elv_m(i);
-        sample_data{i,7} = LSDn_age;
-        sample_data{i,8} = LSDn_int;
-        sample_data{i,9} = LSDn_ext;
-        sample_data{i,10} = d.sites.short_name(i);
-        sample_data{i,11} = d.sites.what(i);
-        sample_data{i,12} = d.sites.what_1(i);
-        sample_data{i,13} = d.sites.shielding(i);
+for i  = 1:3
+    site = unique_sites{i};
+    select = strcmp(sample_data(:, 1), site);
+    site_samples = sample_data(select, :); %select rows matching site
+    no_site_samples = size(site_samples,1); 
+    strings = cell(size(site_samples, 1), 1); %empty cell to collect strings   
+        
+        for a = 1:no_site_samples
+            strings{a} = site_samples{a, 3};
+        end
+
+    % Ensure each element is a character vector
+    strings = cellfun(@char, strings, 'UniformOutput', false);
+
+    input = strjoin(strings,' '); %join strings cosmocal input
+    [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_calculator(input);
+    
+    %metadata
+    d2.sites = d.sites(select, :); %select rows matching site
+    rowIndices = find(select); % Find all row indices matching the site
+    
+    for j = 1:no_site_samples
+        sample_data{rowIndices(j), 4} = names{1, j};
+        sample_data{rowIndices(j), 5} = d2.sites.lat_DD(j);
+        sample_data{rowIndices(j), 6} = d2.sites.lon_DD(j);
+        sample_data{rowIndices(j), 7} = d2.sites.elv_m(j);
+        sample_data{rowIndices(j), 8} = d2.sites.what(j);
+        sample_data{rowIndices(j), 9} = d2.sites.what_1(j);
+        sample_data{rowIndices(j), 10} = d2.sites.shielding(j);
+        sample_data{rowIndices(j), 11} = LSDn_ages(j);
+        sample_data{rowIndices(j), 12} = LSDn_ints(j);
+        sample_data{rowIndices(j), 13} = LSDn_exts(j);
         pause(0.1)
-        disp(strcat("Sample", num2str(i)))
+        pause(0.1)
+        disp(strcat("Sample", num2str(j)))
+
     end
+
+    site_data{i,1} = site;
+    site_data{i,2} = no_site_samples;
+    site_data{i,3} = strjoin(names,', ');
+    site_data{i,4} = sum_val;
+    site_data{i,5} = sum_int;
+    site_data{i,6} = sum_ext;
+    disp(strcat("Site", num2str(i)))
 end
-toc
+%toc
 
 disp("Exposure ages using global production rate calculated")
-
-
-
-
 
 
 
@@ -190,9 +226,9 @@ for i  = 1:length(sample_data)
     if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
     else
         [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data{i,2},nuclide_string,value_St_string,uncert_St_string,value_Lm_string,uncert_Lm_string,value_LSDn_string,uncert_LSDn_string);
-        sample_data{i,14} = LSDn_age;
-        sample_data{i,15} = LSDn_int;
-        sample_data{i,16} = LSDn_ext;
+        sample_data{i,16} = LSDn_age;
+        sample_data{i,17} = LSDn_int;
+        sample_data{i,18} = LSDn_ext;
         pause(0.1)
         disp(strcat("Sample", num2str(i)))
     end
