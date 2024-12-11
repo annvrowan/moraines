@@ -1,4 +1,4 @@
-function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_ext,sum_int,sum_val] = cosmo_calculator(sample_data)
+function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_calculator(sample_data)
 
 %A script to send sample data to the online cosmo calculator and collect the
 %results. Sample_data is the sample info returned from ICE-D by the script
@@ -14,10 +14,10 @@ function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_ext,sum_int,sum_val] = cosmo_c
 
 
 %Check if sample data contains gaps and skip samples if so
-sample_data = sample_data{1};
+%sample_data = sample_data{1};
 %Check sample data is the correct size for cosmo calculator
-a = find(sample_data == ':'); size(a);
-if a < 14; return; end
+%a = find(sample_data == ':'); size(a);
+%if a < 14; return; end
 
 %Format sample data for input to cosmo calculator
 text = regexprep(sample_data,':','\t');
@@ -64,11 +64,11 @@ end
 %Get the summary values of the LSDn scaling method
 summary= getElementsByTagName(xDoc, 'summary').item(0);
 % Navigate to the <all> element within <summary>
-all = getElementsByTagName(summary, 'all').item(0);
-% Navigate to the <St> element within <all>
+all = getElementsByTagName(summary, 'N10quartz').item(0);
+% Navigate to the <LSDn> element within <all>
 LSDn = getElementsByTagName(all, 'LSDn').item(0);
 
-% Get the content of the 'sumval' element within <St>
+% Get the content of the 'sumval' element within <LSDn>
 sum_val = str2double(getTextContent(getElementsByTagName(LSDn, 'sumval').item(0)));
 sum_int = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_int').item(0)));
 sum_ext = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_ext').item(0)));
