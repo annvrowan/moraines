@@ -48,7 +48,7 @@
 
 %Created by Greg Balco
 %Last modifed by Ann Rowan on 10/01/24
-%Last modified by Karlijn Ploeg on 08/02/2024
+%Last modified by Karlijn Ploeg on 12/12/2024
 
 clear all
 close all
@@ -70,30 +70,53 @@ dbc = database('iced','reader','beryllium-10','Vendor','MySQL','Server','localho
 
 %% Query ICED to return a list of sample names
 %Make a MySQL query to return a list of all samples from moraines in the Southern Alps
-q1 = ['select base_site.short_name, base_sample.name, base_sample.lon_DD,base_sample.lat_DD,base_sample.elv_m,base_sample.shielding,base_continent.name, base_site.what, base_sample.what ' ...
-    'from base_sample join base_site on base_site.id = base_sample.site_id join base_continent on base_site.continent_id = base_continent.id ' ...
-    'WHERE (base_sample.lat_DD < -40 AND base_sample.lat_DD > -48)'... 
-    'AND (base_sample.lon_DD < 175 AND base_sample.lon_DD > 166)'... 
-    'and base_site.what like "%oraine%"'];
+
+q1 = ['SELECT DISTINCT base_region.name, base_site.name, base_site.what, base_sample.name, base_sample.what, base_sample.lat_DD, base_sample.lon_DD, base_sample.elv_m,base_sample.shielding, base_publication.short_name, base_publication.doi ' ...
+    'FROM base_sample ' ...
+    'JOIN base_site ON base_site.id = base_sample.site_id ' ...
+    'JOIN base_region ON base_site.region_id = base_region.id ' ...
+    'LEFT JOIN base_samplepublicationsmatch ON base_samplepublicationsmatch.sample_id = base_sample.id ' ...
+    'LEFT JOIN base_publication ON base_publication.id = base_samplepublicationsmatch.publication_id ' ...
+    'JOIN base_application_sites ON base_application_sites.site_id = base_site.id ' ...
+    'JOIN base_application ON base_application.id = base_application_sites.application_id ' ...
+    'WHERE base_application.id = 2 ' ...
+    'AND (base_sample.lat_DD < -40 AND base_sample.lat_DD > -48) ' ...
+    'AND (base_sample.lon_DD < 175 AND base_sample.lon_DD > 166)'];
+
 d.sites = fetch(dbc,q1);
 
-%% 
+%% Overview of sample and site data
+
 %Put the returned sample names into a cell array called name_list. This is
 %useful to double check for duplicates or missing values.
-name_list(:,1) = d.sites.name;
-site_list(:,1) = d.sites.short_name;
-unique_sites = unique(site_list,'stable');
 
-no_samples = length(name_list);
+%Samples
+name_list(:,1) = d.sites.name_2;
+[unique_samples, unique_indices] = unique(name_list, 'stable'); % Get unique samples and their indices
+no_samples = length(unique_samples);
+
+% Remove duplicates
+d.sites = d.sites(unique_indices, :);
+name_list = unique_samples;
+
+%Sites 
+site_list(:,1) = d.sites.name_1;
+unique_sites = unique(site_list,'stable');
 no_sites = length(unique_sites);
 
-%Print number of samples found
-disp(strcat("Number of samples = ",num2str(no_samples)))
-disp(strcat("Number of sites = ",num2str(no_sites)))
+%Regions
+region_list(:,1) = d.sites.name;
+unique_regions = unique(region_list,'stable');
+no_regions = length(unique_regions);
 
-% Store sample and site data
-sample_data = cell(no_samples,18);
-site_data = cell(no_sites,8);
+%Print number of samples found
+disp(strcat("Number of unique samples = ",num2str(no_samples)))
+disp(strcat("Number of sites = ",num2str(no_sites)))
+disp(strcat("Number of regions = ",num2str(no_regions)))
+
+% Create sample and site data arrays to collect exposure age results
+sample_data = cell(no_samples,20);
+site_data = cell(no_sites,11);
 
 %% Collect sample data for all samples indentified and put into a cell array
 % Sample name needs to have this format to query the database: '"Barr2007-A-WH-01B"'
@@ -113,71 +136,9 @@ close(dbc);
 toc
 
 
-%% Send sample data to cosmo calculator and return age and age errors
-%This part of the script calls a different script; cosmo_calculator
-%The script returns the sample names into col3 of the table so they can be
-%checked against the original names in col1 as q quick check that the data
-%is collected as expected. If the sample is missing, col3 has an error
-%message instead.
+%% Choose calibration dataset for local production rate calculations
 
-
-% Calculate with global production rate (default)
-for i  = 1:3
-    site = unique_sites{i};
-    select = strcmp(sample_data(:, 1), site);
-    site_samples = sample_data(select, :); %select rows matching site
-    no_site_samples = size(site_samples,1); 
-    strings = cell(size(site_samples, 1), 1); %empty cell to collect strings   
-        
-        for a = 1:no_site_samples
-            strings{a} = site_samples{a, 3};
-        end
-
-    % Ensure each element is a character vector
-    strings = cellfun(@char, strings, 'UniformOutput', false);
-
-    input = strjoin(strings,' '); %join strings cosmocal input
-    [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_calculator(input);
-    
-    %metadata
-    d2.sites = d.sites(select, :); %select rows matching site
-    rowIndices = find(select); % Find all row indices matching the site
-    
-    for j = 1:no_site_samples
-        sample_data{rowIndices(j), 4} = names{1, j};
-        sample_data{rowIndices(j), 5} = d2.sites.lat_DD(j);
-        sample_data{rowIndices(j), 6} = d2.sites.lon_DD(j);
-        sample_data{rowIndices(j), 7} = d2.sites.elv_m(j);
-        sample_data{rowIndices(j), 8} = d2.sites.what(j);
-        sample_data{rowIndices(j), 9} = d2.sites.what_1(j);
-        sample_data{rowIndices(j), 10} = d2.sites.shielding(j);
-        sample_data{rowIndices(j), 11} = LSDn_ages(j);
-        sample_data{rowIndices(j), 12} = LSDn_ints(j);
-        sample_data{rowIndices(j), 13} = LSDn_exts(j);
-        pause(0.1)
-        pause(0.1)
-        disp(strcat("Sample", num2str(j)))
-
-    end
-
-    site_data{i,1} = site;
-    site_data{i,2} = no_site_samples;
-    site_data{i,3} = strjoin(names,', ');
-    site_data{i,4} = sum_val;
-    site_data{i,5} = sum_int;
-    site_data{i,6} = sum_ext;
-    disp(strcat("Site", num2str(i)))
-end
-%toc
-
-disp("Exposure ages using global production rate calculated")
-
-
-
-
-%% Local production rate
-
-% Get calibration dataset from the calibration website
+% Select calibration dataset from the calibration page of ICE-D
 cal_page_html = webread('https://version2.ice-d.org/production%20rate%20calibration%20data/site/MACAULAY/');
 
 % Scrape the formatted text block out of the HTML
@@ -185,60 +146,119 @@ startindex = strfind(cal_page_html,'<!-- begin v3 --><pre>') + length('<!-- begi
 endindex = strfind(cal_page_html,'</pre><!-- end v3 -->') - 1;
 cal_input_text = cal_page_html(startindex:endindex);
 
-%Make sure to only have one nuclide in the input text!
+% Make sure to only have one nuclide in the input text, in this case 10Be!
 lines = splitlines(cal_input_text);
 filtered_lines = lines(~contains(lines, 'C-14')); % Filter C-14 out 
 filtered_text = strjoin(filtered_lines, '\n');
 
-%Calibration calculator
+%% Calculate calibration parameters
+
+%Send dataset to calibration calculator
 url = "http://hess.ess.washington.edu/cgi-bin/matweb";
-cal_xml_result = webread(url,'mlmfile','cal_input_v3','reportType','XML','plotFlag','no','text_block',filtered_text);
+cal_result = webread(url,'mlmfile','cal_input_v3','reportType','XML','plotFlag','no','text_block',filtered_text);
 
-temp = regexp(cal_xml_result,['<nuclide>(.*?)</nuclide>'],'tokens');
-nuclide_string = temp{1}{1};
+% Fix the XML string by replacing <br> with <br/> (somehow otherwise not
+% working somehow)
+fixed_string= strrep(cal_result, '<br>', '<br/>');
 
-% Get calibrated production rate parameters for LSDn scaling method
-temp = regexp(cal_xml_result,['<summary_value_St>(.*?)</summary_value_St>'],'tokens');
-value_St_string = temp{1}{1};
-temp = regexp(cal_xml_result,['<summary_uncert_St>(.*?)</summary_uncert_St>'],'tokens');
-uncert_St_string = temp{1}{1};
-temp = regexp(cal_xml_result,['<summary_value_Lm>(.*?)</summary_value_Lm>'],'tokens');
-value_Lm_string = temp{1}{1};
-temp = regexp(cal_xml_result,['<summary_uncert_Lm>(.*?)</summary_uncert_Lm>'],'tokens');
-uncert_Lm_string = temp{1}{1};
-temp = regexp(cal_xml_result,['<summary_value_LSDn>(.*?)</summary_value_LSDn>'],'tokens');
-value_LSDn_string = temp{1}{1};
-temp = regexp(cal_xml_result,['<summary_uncert_LSDn>(.*?)</summary_uncert_LSDn>'],'tokens');
-uncert_LSDn_string = temp{1}{1};
+%Load the parser and parse string from data returned from cosmo calculator
+import matlab.io.xml.dom.*
+xDoc = parseString(Parser,fixed_string);
 
+% Define the parameters to extract
+tags = {'nuclide', 'summary_value_St', 'summary_uncert_St', 'summary_value_Lm', 'summary_uncert_Lm', 'summary_value_LSDn', 'summary_uncert_LSDn'};
+fields = {'nuclide', 'value_St', 'uncert_St', 'value_Lm', 'uncert_Lm', 'value_LSDn', 'uncert_LSDn'};
+parameters = struct();
+
+% Loop through each tag and extract the text content
+for i = 1:length(tags)
+    parameters.(fields{i}) = getElementsByTagName(xDoc, tags{i}).item(0).getTextContent();
+end
 
 disp("Returned calibrated production rate parameters")
 
+%% Send sample data to cosmo calculator and return age and age errors
+%This part of the script calls a different script; cosmo_calculator
 
+%The script returns the sample names into col3 of the table so they can be
+%checked against the original names in col1 as q quick check that the data
+%is collected as expected. If the sample is missing, col3 has an error
+%message instead.
 
-%% Calculate exposure ages using local production rate parameters
-
-%load sample_data_global.mat;
-%sample_data = table2cell(sample_data);
-
-%%
-for i  = 1:length(sample_data)
-    if isempty(sample_data{i,2}); sample_data{i,3} = 'database did not return sample data';
-    else
-        [name,LSDn_age,LSDn_int,LSDn_ext] = calibration_calculator(sample_data{i,2},nuclide_string,value_St_string,uncert_St_string,value_Lm_string,uncert_Lm_string,value_LSDn_string,uncert_LSDn_string);
-        sample_data{i,16} = LSDn_age;
-        sample_data{i,17} = LSDn_int;
-        sample_data{i,18} = LSDn_ext;
-        pause(0.1)
-        disp(strcat("Sample", num2str(i)))
+for i  = 15
+    site = unique_sites{i}; %select site
+    select = strcmp(sample_data(:, 1), site); %select corresponding site
+    site_samples = sample_data(select, :); %select data rows matching site
+    no_site_samples = size(site_samples,1); %select number of samples within site
+    strings = cell(size(site_samples, 1), 1); %empty cell to collect strings for cosmocalinput   
+        
+    %NEED TO FILTER HERE FOR SAMPLES WITH ONLY 1 MEASUREMENT
+    for a = 1:no_site_samples
+        strings{a} = site_samples{a, 3};
     end
+   
+
+    % Join strings of samples together
+    strings = cellfun(@char, strings, 'UniformOutput', false);
+    input = strjoin(strings,' '); %join strings cosmocal input
+
+    % Send data to cosmo_calculator
+    [ages_global,ages_local] = cosmo_calculator(input,parameters);
+    
+    %metadata
+    d2.sites = d.sites(select, :); %select rows matching site
+    rowIndices = find(select); % Find all row indices matching the site
+    
+       for j = 1:no_site_samples
+        sample_data{rowIndices(j), 4} = d2.sites.name(j);   %region
+        sample_data{rowIndices(j), 5} = site; %site name
+        sample_data{rowIndices(j), 6} = d2.sites.what(j); %landform
+        sample_data{rowIndices(j), 7} = ages_global.sample_ages(j).name; %sample name
+        sample_data{rowIndices(j), 8} = d2.sites.what_1(j); %type of sample
+        sample_data{rowIndices(j), 9} = d2.sites.lat_DD(j); %latitude
+        sample_data{rowIndices(j), 10} = d2.sites.lon_DD(j); %longitude
+        sample_data{rowIndices(j), 11} = d2.sites.elv_m(j); %elevation
+        sample_data{rowIndices(j), 12} = d2.sites.shielding(j);%topographic shielding
+        sample_data{rowIndices(j), 13} = ages_global.sample_ages(j).LSDn_age;
+        sample_data{rowIndices(j), 14} = ages_global.sample_ages(j).LSDn_int;
+        sample_data{rowIndices(j), 15} = ages_global.sample_ages(j).LSDn_ext;
+        sample_data{rowIndices(j), 16} = ages_local.sample_ages(j).LSDn_age;
+        sample_data{rowIndices(j), 17} = ages_local.sample_ages(j).LSDn_int;
+        sample_data{rowIndices(j), 18} = ages_local.sample_ages(j).LSDn_ext;
+        sample_data{rowIndices(j), 19} = d2.sites.short_name(j); %short citation
+        sample_data{rowIndices(j), 20} = d2.sites.doi(j); %doi
+        pause(0.1)
+        disp(strcat("Sample", num2str(j)))
+       end
+
+    site_data{i,1} = d2.sites.name(1,1); %region
+    site_data{i,2} = site; %site name
+    site_data{i,3} = d2.sites.what(1,1); %landform context
+    site_data{i,4} = no_site_samples; %number of samples
+
+    % Extract the sample names from the structure
+    names = {ages_global.sample_ages.name}; % This will create a cell array of names
+    concatenated_names = strjoin(names, ', '); % Join the names with a comma and space
+
+    site_data{i,5} = concatenated_names; %sample IDs used for landform calculation
+    site_data{i,6} = ages_global.sum_val;
+    site_data{i,7} = ages_global.sum_int;
+    site_data{i,8} = ages_global.sum_ext;
+    site_data{i,9} = ages_local.sum_val;
+    site_data{i,10} = ages_local.sum_int;
+    site_data{i,11} = ages_local.sum_ext;
+    site_data{i,12} = d2.sites.short_name(1,1); %short citation
+    site_data{i,13} = d2.sites.doi(1,1); %doi
+
+    disp(strcat("Site", num2str(i)))
 end
 
-disp("Exposure ages using local production rate calculated")
-%%
+disp("Calculated exposure ages")
 
-%format the results into a Matlab table and save
-sample_data = cell2table(sample_data,'VariableNames',{'name','cosmocalcinput','name2','lat_dd','lon_dd','elv_m','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','site','what_site','what_sample','shielding','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc'});
+%% Save sample and site data in table type
+
+sample_data = cell2table(sample_data,'VariableNames',{'site','sample','cosmocalcinput','region','site','landform','sample_ID','type','lat_dd','lon_dd','elv_m','topo_shielding','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
+site_data = cell2table(site_data,'VariableNames',{'region','site','landform','no_samples','sample_IDs','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
 save('sample_data','sample_data')
 
 
