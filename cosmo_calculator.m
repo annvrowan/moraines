@@ -1,4 +1,6 @@
-function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_calculator(sample_data)
+%function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_calculator(sample_data)
+function [ages_global,ages_local] = cosmo_calculator(sample_data, parameters)
+
 
 %A script to send sample data to the online cosmo calculator and collect the
 %results. Sample_data is the sample info returned from ICE-D by the script
@@ -11,6 +13,7 @@ function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_c
 
 %Created by Ann Rowan on 03/05/21
 %Last modifed by Ann on 10/01/24
+%Last modifed by Karlijn on 11/12/24
 
 
 %Check if sample data contains gaps and skip samples if so
@@ -19,62 +22,82 @@ function [names,LSDn_ages,LSDn_ints,LSDn_exts,sum_val,sum_int,sum_ext] = cosmo_c
 %a = find(sample_data == ':'); size(a);
 %if a < 14; return; end
 
+
 %Format sample data for input to cosmo calculator
 text = regexprep(sample_data,':','\t');
 
+
 %% Test
 
-%text = ['Suth2007-A-13 -44.03550 168.47778 215.00000 std 5.0 2.65 1.0000 0 2005; ' ...
-   % 'Suth2007-A-13 Be-10 quartz 109000.000 11000.000 NIST_30600; ' ...
-   % 'Suth2007-A-14 -44.03550 168.47778 215.00000 std 5.0 2.65 1.0000 0 2005; ' ...
-   % 'Suth2007-A-14 Be-10 quartz 81000.000 10000.000 NIST_30600;'];
+% text = ['Suth2007-A-13 -44.03550 168.47778 215.00000 std 5.0 2.65 1.0000 0 2005; ' ...
+%    'Suth2007-A-13 Be-10 quartz 109000.000 11000.000 NIST_30600; ' ...
+%    'Suth2007-A-14 -44.03550 168.47778 215.00000 std 5.0 2.65 1.0000 0 2005; ' ...
+%    'Suth2007-A-14 Be-10 quartz 81000.000 10000.000 NIST_30600;'];
 
-%% Calculations
+
+%% Calculations 
 
 %Send sample info to cosmo calculator
 url = "https://hess.ess.washington.edu/cgi-bin/matweb";
-data = webread(url,'mlmfile','age_input_v3','reportType','XML','resultType','long','plotFlag','no','text_block',text,'summary','yes');
+data_global = webread(url,'mlmfile','age_input_v3','reportType','XML','resultType','long','plotFlag','no','text_block',text,'summary','yes');
+data_local = webread(url,'mlmfile','age_input_v3','reportType','XML','resultType','long','plotFlag','no','summary','yes',...
+    'text_block',text,...
+    'trace_string','nothing here but this is required',...
+    'calib_name','nothing here either but this is required too',...
+    'nuclide_name',parameters.nuclide,...
+    'P_St',parameters.value_St,'delP_St',parameters.uncert_St,...
+    'P_Lm',parameters.value_Lm,'delP_Lm',parameters.uncert_Lm,...
+    'P_LSDn',parameters.value_LSDn,'delP_LSDn',parameters.uncert_LSDn);
 
-%Load the parser and parse string from data returned from cosmo calculator
+%%
+%Load the parser
 import matlab.io.xml.dom.*
-xDoc = parseString(Parser,data);
 
-% Get all LSDn ages and SD for samples
-name_elements= getElementsByTagName(xDoc,'sample_name');
-LSDn_age_elements = getElementsByTagName(xDoc, 't10quartz_LSDn');
-LSDn_int_elements = getElementsByTagName(xDoc, 'delt10quartz_int_LSDn');
-LSDn_ext_elements = getElementsByTagName(xDoc, 'delt10quartz_ext_LSDn');
+% Define the XML data to be parsed 
+data_xml = {data_global, data_local};
 
-no_samples = name_elements.getLength;
-names = strings(1, no_samples);
-LSDn_ages = zeros(1, no_samples);
-LSDn_ints = zeros(1, no_samples);
-LSDn_exts = zeros(1, no_samples);
+%Define the struct in which to store all ages
+results = struct('sample_ages', [], 'sum_val', [],'sum_int', [],'sum_ext', []);
 
-% Loop through each element and extract the values
-for i = 0:no_samples-1
-    names(i+1) = name_elements.item(i).getTextContent;
-    LSDn_ages(i+1) = str2double(LSDn_age_elements.item(i).getTextContent);
-    LSDn_ints(i+1) = str2double(LSDn_int_elements.item(i).getTextContent);
-    LSDn_exts(i+1) = str2double(LSDn_ext_elements.item(i).getTextContent);
+for k = 1:length(data_xml)
+    data= data_xml{k};
+    
+    xDoc = parseString(Parser, data);
+
+    % Get all LSDn ages and SD for samples
+    name_elements = getElementsByTagName(xDoc, 'sample_name');
+    LSDn_age_elements = getElementsByTagName(xDoc, 't10quartz_LSDn');
+    LSDn_int_elements = getElementsByTagName(xDoc, 'delt10quartz_int_LSDn');
+    LSDn_ext_elements = getElementsByTagName(xDoc, 'delt10quartz_ext_LSDn');
+
+    no_samples = name_elements.getLength;
+    ages = struct('name', [], 'LSDn_age', [], 'LSDn_int', [], 'LSDn_ext', []);
+
+    % Loop through each element and extract the values
+    for i = 0:no_samples-1
+        ages(i+1).name = name_elements.item(i).getTextContent;
+        ages(i+1).LSDn_age = str2double(LSDn_age_elements.item(i).getTextContent);
+        ages(i+1).LSDn_int = str2double(LSDn_int_elements.item(i).getTextContent);
+        ages(i+1).LSDn_ext = str2double(LSDn_ext_elements.item(i).getTextContent);
+    end
+
+    % Store the LSDn data in the results struct
+    results(k).sample_ages = ages;
+
+    % Calculate landform age
+    summary = getElementsByTagName(xDoc, 'summary').item(0);
+    all = getElementsByTagName(summary, 'N10quartz').item(0);
+    LSDn = getElementsByTagName(all, 'LSDn').item(0);
+
+    % Get the content of the 'sumval' element within <LSDn>
+    results(k).sum_val = str2double(getTextContent(getElementsByTagName(LSDn, 'sumval').item(0)));
+    results(k).sum_int = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_int').item(0)));
+    results(k).sum_ext = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_ext').item(0)));
 end
 
-%% Calculate landform age
-
-%Get the summary values of the LSDn scaling method
-summary= getElementsByTagName(xDoc, 'summary').item(0);
-% Navigate to the <all> element within <summary>
-all = getElementsByTagName(summary, 'N10quartz').item(0);
-% Navigate to the <LSDn> element within <all>
-LSDn = getElementsByTagName(all, 'LSDn').item(0);
-
-% Get the content of the 'sumval' element within <LSDn>
-sum_val = str2double(getTextContent(getElementsByTagName(LSDn, 'sumval').item(0)));
-sum_int = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_int').item(0)));
-sum_ext = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_ext').item(0)));
-
-
-
+% Access the results for global and local data
+ages_global = results(1);
+ages_local = results(2);
 
 
 
