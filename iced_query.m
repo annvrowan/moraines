@@ -91,7 +91,7 @@ d.sites = fetch(dbc,q1);
 %useful to double check for duplicates or missing values.
 
 %Samples
-name_list(:,1) = d.sites.name_2;
+name_list(:,1) = d.sites.name_2; %sample name
 [unique_samples, unique_indices] = unique(name_list, 'stable'); % Get unique samples and their indices
 no_samples = length(unique_samples);
 
@@ -135,6 +135,47 @@ end
 close(dbc);
 toc
 
+%% Merge cosmocal input of samples with multiple measurements
+
+% New cell arrays to store data
+duplicate_samples = {};
+
+% Input sample data
+data=sample_data;
+
+% Loops through 3rd column to check for multiple entries for cosmo input
+for i = 1:size(data, 1)
+    if iscell(data{i, 3}) && numel(data{i, 3}) > 1 %Filter our multiple measurements on 1 sample
+       
+       duplicate_samples = [duplicate_samples;data{i, 2}];
+       
+       % Initialize variables to store unique and merged parts of the
+       % strings
+       
+       strings = {};
+
+       for j = 1:numel(data{i, 3}) %select cosmocal input
+
+            if j ==1 %first measurement
+               strings{j} = data{i, 3}{j};
+           
+            else %second measurement
+               parts = strsplit(data{i, 3}{j}, ';');
+               strings{j} = parts{2};         
+            end
+       end
+       
+       new_row = strjoin(strings,'');
+       new_row = strcat(new_row,';');
+       disp(new_row);
+       data{i, 3}=new_row;
+    else
+        %do nothing
+    end
+end
+
+
+sample_data = data;
 
 %% Choose calibration dataset for local production rate calculations
 
@@ -185,6 +226,7 @@ disp("Returned calibrated production rate parameters")
 %is collected as expected. If the sample is missing, col3 has an error
 %message instead.
 
+
 for i  = 15
     site = unique_sites{i}; %select site
     select = strcmp(sample_data(:, 1), site); %select corresponding site
@@ -192,12 +234,10 @@ for i  = 15
     no_site_samples = size(site_samples,1); %select number of samples within site
     strings = cell(size(site_samples, 1), 1); %empty cell to collect strings for cosmocalinput   
         
-    %NEED TO FILTER HERE FOR SAMPLES WITH ONLY 1 MEASUREMENT
     for a = 1:no_site_samples
         strings{a} = site_samples{a, 3};
     end
    
-
     % Join strings of samples together
     strings = cellfun(@char, strings, 'UniformOutput', false);
     input = strjoin(strings,' '); %join strings cosmocal input
