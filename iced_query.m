@@ -71,17 +71,39 @@ dbc = database('iced','reader','beryllium-10','Vendor','MySQL','Server','localho
 %% Query ICED to return a list of sample names
 %Make a MySQL query to return a list of all samples from moraines in the Southern Alps
 
-q1 = ['SELECT DISTINCT base_region.name, base_site.name, base_site.what, base_sample.name, base_sample.what, base_sample.lat_DD, base_sample.lon_DD, base_sample.elv_m,base_sample.shielding, base_publication.short_name, base_publication.doi ' ...
+% q1 = ['SELECT DISTINCT base_region.name, base_site.name, base_site.what, base_sample.name, base_sample.what, base_sample.lat_DD, base_sample.lon_DD, base_sample.elv_m,base_sample.shielding, base_publication.short_name, base_publication.doi ' ...
+%     'FROM base_sample ' ...
+%     'JOIN base_site ON base_site.id = base_sample.site_id ' ...
+%     'JOIN base_region ON base_site.region_id = base_region.id ' ...
+%     'LEFT JOIN base_samplepublicationsmatch ON base_samplepublicationsmatch.sample_id = base_sample.id ' ...
+%     'LEFT JOIN base_publication ON base_publication.id = base_samplepublicationsmatch.publication_id ' ...
+%     'JOIN base_application_sites ON base_application_sites.site_id = base_site.id ' ...
+%     'JOIN base_application ON base_application.id = base_application_sites.application_id ' ...
+%     'WHERE base_application.id = 2 ' ...
+%     'AND (base_sample.lat_DD < -40 AND base_sample.lat_DD > -48) ' ...
+%     'AND (base_sample.lon_DD < 175 AND base_sample.lon_DD > 166)'];
+
+q1 = ['SELECT base_region.name, base_site.name, base_site.what, base_sample.id, base_sample.name, ' ...
+    'base_sample.what, base_sample.lat_DD, base_sample.lon_DD, base_sample.elv_m, base_sample.shielding, ' ...
+    'GROUP_CONCAT(DISTINCT base_publication.short_name ORDER BY base_publication.year ASC) AS publications, ' ...
+    'GROUP_CONCAT(DISTINCT base_publication.doi ORDER BY base_publication.year ASC) AS dois ' ...
+    'FROM (SELECT DISTINCT base_sample.id ' ...
     'FROM base_sample ' ...
+    'JOIN base_site ON base_site.id = base_sample.site_id ' ...
+    'JOIN base_region ON base_site.region_id = base_region.id ' ...
+    'JOIN base_application_sites ON base_application_sites.site_id = base_site.id ' ...
+    'JOIN base_application ON base_application.id = base_application_sites.application_id ' ...
+    'WHERE base_application.id = 2 ' ...
+    'AND base_sample.lat_DD < -40 AND base_sample.lat_DD > -48 ' ...
+    'AND base_sample.lon_DD < 175 AND base_sample.lon_DD > 166) AS unique_samples ' ...
+    'JOIN base_sample ON base_sample.id = unique_samples.id ' ...
     'JOIN base_site ON base_site.id = base_sample.site_id ' ...
     'JOIN base_region ON base_site.region_id = base_region.id ' ...
     'LEFT JOIN base_samplepublicationsmatch ON base_samplepublicationsmatch.sample_id = base_sample.id ' ...
     'LEFT JOIN base_publication ON base_publication.id = base_samplepublicationsmatch.publication_id ' ...
     'JOIN base_application_sites ON base_application_sites.site_id = base_site.id ' ...
     'JOIN base_application ON base_application.id = base_application_sites.application_id ' ...
-    'WHERE base_application.id = 2 ' ...
-    'AND (base_sample.lat_DD < -40 AND base_sample.lat_DD > -48) ' ...
-    'AND (base_sample.lon_DD < 175 AND base_sample.lon_DD > 166)'];
+    'GROUP BY base_sample.id, base_region.name, base_site.name, base_site.what, base_sample.name, base_sample.what, base_sample.lat_DD, base_sample.lon_DD, base_sample.elv_m, base_sample.shielding'];
 
 d.sites = fetch(dbc,q1);
 
@@ -115,8 +137,8 @@ disp(strcat("Number of sites = ",num2str(no_sites)))
 disp(strcat("Number of regions = ",num2str(no_regions)))
 
 % Create sample and site data arrays to collect exposure age results
-sample_data = cell(no_samples,20);
-site_data = cell(no_sites,11);
+sample_data = cell(no_samples,21);
+site_data = cell(no_sites,12);
 
 %% Collect sample data for all samples indentified and put into a cell array
 % Sample name needs to have this format to query the database: '"Barr2007-A-WH-01B"'
@@ -275,20 +297,21 @@ for i  = 1:no_sites
         sample_data{rowIndices(j), 4} = d2.sites.name(j);   %region
         sample_data{rowIndices(j), 5} = site; %site name
         sample_data{rowIndices(j), 6} = d2.sites.what(j); %landform
-        sample_data{rowIndices(j), 7} = site_samples{j, 2}; %sample name
-        sample_data{rowIndices(j), 8} = d2.sites.what_1(j); %type of sample
-        sample_data{rowIndices(j), 9} = d2.sites.lat_DD(j); %latitude
-        sample_data{rowIndices(j), 10} = d2.sites.lon_DD(j); %longitude
-        sample_data{rowIndices(j), 11} = d2.sites.elv_m(j); %elevation
-        sample_data{rowIndices(j), 12} = d2.sites.shielding(j);%topographic shielding
-        sample_data{rowIndices(j), 13} = ages_global.sample_ages(j).LSDn_age;
-        sample_data{rowIndices(j), 14} = ages_global.sample_ages(j).LSDn_int;
-        sample_data{rowIndices(j), 15} = ages_global.sample_ages(j).LSDn_ext;
-        sample_data{rowIndices(j), 16} = ages_local.sample_ages(j).LSDn_age;
-        sample_data{rowIndices(j), 17} = ages_local.sample_ages(j).LSDn_int;
-        sample_data{rowIndices(j), 18} = ages_local.sample_ages(j).LSDn_ext;
-        sample_data{rowIndices(j), 19} = d2.sites.short_name(j); %short citation
-        sample_data{rowIndices(j), 20} = d2.sites.doi(j); %doi
+        sample_data{rowIndices(j), 7} = d2.sites.id(j); %iced_id
+        sample_data{rowIndices(j), 8} = site_samples{j, 2}; %sample name
+        sample_data{rowIndices(j), 9} = d2.sites.what_1(j); %type of sample
+        sample_data{rowIndices(j), 10} = d2.sites.lat_DD(j); %latitude
+        sample_data{rowIndices(j), 11} = d2.sites.lon_DD(j); %longitude
+        sample_data{rowIndices(j), 12} = d2.sites.elv_m(j); %elevation
+        sample_data{rowIndices(j), 13} = d2.sites.shielding(j);%topographic shielding
+        sample_data{rowIndices(j), 14} = ages_global.sample_ages(j).LSDn_age;
+        sample_data{rowIndices(j), 15} = ages_global.sample_ages(j).LSDn_int;
+        sample_data{rowIndices(j), 16} = ages_global.sample_ages(j).LSDn_ext;
+        sample_data{rowIndices(j), 17} = ages_local.sample_ages(j).LSDn_age;
+        sample_data{rowIndices(j), 18} = ages_local.sample_ages(j).LSDn_int;
+        sample_data{rowIndices(j), 19} = ages_local.sample_ages(j).LSDn_ext;
+        sample_data{rowIndices(j), 20} = d2.sites.publications(j); %short citation
+        sample_data{rowIndices(j), 21} = d2.sites.dois(j); %doi
         pause(0.1)
         disp(strcat("Sample", num2str(j)))
        end
@@ -309,8 +332,8 @@ for i  = 1:no_sites
     site_data{i,9} = ages_local.sum_val;
     site_data{i,10} = ages_local.sum_int;
     site_data{i,11} = ages_local.sum_ext;
-    site_data{i,12} = d2.sites.short_name(1,1); %short citation
-    site_data{i,13} = d2.sites.doi(1,1); %doi
+    site_data{i,12} = d2.sites.publications(1,1); %short citation
+    site_data{i,13} = d2.sites.dois(1,1); %doi
 
     disp(strcat("Site", num2str(i)))
 end
@@ -319,9 +342,19 @@ disp("Calculated exposure ages")
 
 %% Save sample and site data in table type
 
-sample_data = cell2table(sample_data,'VariableNames',{'site1','sample','cosmocalcinput','region','site2','landform','sample_ID','type','lat_dd','lon_dd','elv_m','topo_shielding','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
-site_data = cell2table(site_data,'VariableNames',{'region','site','landform','no_samples','sample_IDs','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
+sample_data = cell2table(sample_data,'VariableNames',{'site1','sample_name1','cosmocalcinput','region','site','landform','ICED_ID','sample_name','type','lat_dd','lon_dd','elv_m','topo_shielding','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','publications','dois'});
+site_data = cell2table(site_data,'VariableNames',{'region','site','landform','no_samples','sample_names','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','publications','dois'});
 save('sample_data','sample_data');
 save('site_data','site_data');
 
+%% To excel
+
+% Assuming sample_data and d.sites are tables
+filename = 'iced_10be_upd.xlsx'; % Specify the filename
+
+% Write sample_data to the first sheet
+writetable(sample_data, filename, 'Sheet', 'sample_data');
+
+% Write d.sites to the second sheet
+writetable(site_data, filename, 'Sheet', 'site_data');
 
