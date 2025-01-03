@@ -148,7 +148,7 @@ data=sample_data;
 sites = d.sites;
 
 % Loops through 3rd column to check for multiple entries for cosmo input
-for i = 1:size(data, 1)
+for i = size(data, 1):-1:1
     if iscell(data{i, 3}) && numel(data{i, 3}) > 1 %Filter our multiple measurements on 1 sample
        
        duplicate_samples = [duplicate_samples;data{i, 2}];
@@ -181,9 +181,14 @@ for i = 1:size(data, 1)
        data = [data(1:i, :); new_entries; data(i+1:end, :)];
        % Insert new rows directly after the current row in d.sites
        sites = [sites(1:i, :); new_sites_entries; sites(i+1:end, :)];
-
+        
     else        
-
+        str = char(data{i, 3});
+        elements = strsplit(str, ':'); % Split the string at each ':'
+        if length(elements) < 13
+           data(i, :) = []; % Remove the entire row
+           sites(i, :) = []; % Remove the corresponding row in sites
+        end
     end
 end
 
@@ -240,7 +245,7 @@ disp("Returned calibrated production rate parameters")
 %message instead.
 
 
-for i  = 12:no_sites
+for i  = 1:no_sites
     site = unique_sites{i}; %select site
     select = strcmp(sample_data(:, 1), site); %select corresponding site
     site_samples = sample_data(select, :); %select data rows matching site
@@ -314,9 +319,9 @@ disp("Calculated exposure ages")
 
 %% Save sample and site data in table type
 
-sample_data = cell2table(sample_data,'VariableNames',{'site','sample','cosmocalcinput','region','site','landform','sample_ID','type','lat_dd','lon_dd','elv_m','topo_shielding','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
+sample_data = cell2table(sample_data,'VariableNames',{'site1','sample','cosmocalcinput','region','site2','landform','sample_ID','type','lat_dd','lon_dd','elv_m','topo_shielding','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
 site_data = cell2table(site_data,'VariableNames',{'region','site','landform','no_samples','sample_IDs','LSDn_age_glob','LSDn_int_glob','LSDn_ext_glob','LSDn_age_loc','LSDn_int_loc','LSDn_ext_loc','short_citation','doi'});
-save('sample_data','sample_data')
-
+save('sample_data','sample_data');
+save('site_data','site_data');
 
 
