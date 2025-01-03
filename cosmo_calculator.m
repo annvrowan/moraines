@@ -22,9 +22,13 @@ function [ages_global,ages_local] = cosmo_calculator(sample_data, parameters)
 %a = find(sample_data == ':'); size(a);
 %if a < 14; return; end
 
-
+%text=input;
 %Format sample data for input to cosmo calculator
+
+%text = regexprep(input,':','\t');
+
 text = regexprep(sample_data,':','\t');
+
 
 
 %% Test
@@ -34,6 +38,7 @@ text = regexprep(sample_data,':','\t');
 %    'Suth2007-A-14 -44.03550 168.47778 215.00000 std 5.0 2.65 1.0000 0 2005; ' ...
 %    'Suth2007-A-14 Be-10 quartz 81000.000 10000.000 NIST_30600;'];
 
+%text = ['Kapl2010-B-IS-06-15 -43.99190 170.04910 2001.00000 std 2.5 2.65 0.9730 0 2006; Kapl2010-B-IS-06-15 Be-10 quartz 234429.000 5413.000 07KNSTD; Kapl2010-B-IS-06-16 -43.99190 170.04910 1999.00000 std 1.9 2.65 0.9890 0 2006; Kapl2010-B-IS-06-16 Be-10 quartz 139381.000 2956.000 07KNSTD; Kapl2010-B-IS-06-16 Be-10 quartz 139331.000 3649.000 07KNSTD; Kapl2010-B-IS-06-17 -43.99010 170.05120 2016.00000 std 2.7 2.65 0.9830 0 2006; Kapl2010-B-IS-06-17 Be-10 quartz 198061.000 4543.000 07KNSTD; Kapl2010-B-IS-06-18 -43.99010 170.05130 2015.00000 std 3.0 2.65 0.9810 0 2006; Kapl2010-B-IS-06-18 Be-10 quartz 231801.000 6781.000 07KNSTD; Kapl2010-B-IS-06-19 -43.99050 170.05050 2006.00000 std 1.8 2.65 0.9880 0 2006; Kapl2010-B-IS-06-19 Be-10 quartz 229467.000 4796.000 07KNSTD; Kapl2010-B-IS-06-20 -43.99040 170.04950 2003.00000 std 2.9 2.65 0.9880 0 2006; Kapl2010-B-IS-06-20 Be-10 quartz 345737.000 7951.000 07KNSTD; Kapl2010-B-IS-06-21 -43.99000 170.04790 2004.00000 std 1.9 2.65 0.9880 0 2006; Kapl2010-B-IS-06-21 Be-10 quartz 226377.000 5251.000 07KNSTD; Kapl2010-B-IS-06-22 -43.99000 170.04750 1994.00000 std 2.7 2.65 0.9880 0 2006; Kapl2010-B-IS-06-22 Be-10 quartz 239078.000 5773.000 KNSTD; Kapl2010-B-IS-06-23 -43.99020 170.04730 1982.00000 std 1.5 2.65 0.9870 0 2006; Kapl2010-B-IS-06-23 Be-10 quartz 231041.000 5563.000 KNSTD; Kapl2010-B-IS-06-24 -43.99060 170.04750 1981.00000 std 2.5 2.65 0.9910 0 2006; Kapl2010-B-IS-06-24 Be-10 quartz 236520.000 5464.000 07KNSTD; Kapl2010-B-IS-06-25 -43.99090 170.04680 1955.00000 std 2.6 2.65 0.9860 0 2006; Kapl2010-B-IS-06-25 Be-10 quartz 245617.000 5340.000 KNSTD; Kapl2010-B-IS-06-26 -43.99080 170.04500 1917.00000 std 3.1 2.65 0.9820 0 2006; Kapl2010-B-IS-06-26 Be-10 quartz 202443.000 5155.000 07KNSTD; Kapl2010-B-IS-06-27 -43.99080 170.04430 1905.00000 std 4.4 2.65 0.9840 0 2006; Kapl2010-B-IS-06-27 Be-10 quartz 207131.000 5262.000 07KNSTD; Kapl2010-B-IS-06-28 -43.99160 170.04430 1878.00000 std 2.7 2.65 0.9840 0 2006; Kapl2010-B-IS-06-28 Be-10 quartz 206810.000 5865.000 07KNSTD; Kapl2010-B-IS-06-47 -43.99170 170.04210 1850.00000 std 1.1 2.65 0.9840 0 2006;'];
 
 %% Calculations 
 
@@ -65,34 +70,43 @@ for k = 1:length(data_xml)
     xDoc = parseString(Parser, data);
 
     % Get all LSDn ages and SD for samples
-    name_elements = getElementsByTagName(xDoc, 'sample_name');
+    %name_elements = getElementsByTagName(xDoc, 'sample_name');
     LSDn_age_elements = getElementsByTagName(xDoc, 't10quartz_LSDn');
     LSDn_int_elements = getElementsByTagName(xDoc, 'delt10quartz_int_LSDn');
     LSDn_ext_elements = getElementsByTagName(xDoc, 'delt10quartz_ext_LSDn');
 
-    no_samples = name_elements.getLength;
-    ages = struct('name', [], 'LSDn_age', [], 'LSDn_int', [], 'LSDn_ext', []);
+    no_samples = LSDn_age_elements.getLength;
+    ages = struct('LSDn_age', [], 'LSDn_int', [], 'LSDn_ext', []);
 
     % Loop through each element and extract the values
     for i = 0:no_samples-1
-        ages(i+1).name = name_elements.item(i).getTextContent;
+        %ages(i+1).name = name_elements.item(i).getTextContent;
         ages(i+1).LSDn_age = str2double(LSDn_age_elements.item(i).getTextContent);
         ages(i+1).LSDn_int = str2double(LSDn_int_elements.item(i).getTextContent);
         ages(i+1).LSDn_ext = str2double(LSDn_ext_elements.item(i).getTextContent);
     end
-
+    
+    try
     % Store the LSDn data in the results struct
     results(k).sample_ages = ages;
 
     % Calculate landform age
     summary = getElementsByTagName(xDoc, 'summary').item(0);
-    all = getElementsByTagName(summary, 'N10quartz').item(0);
-    LSDn = getElementsByTagName(all, 'LSDn').item(0);
+    n10quartz = getElementsByTagName(summary, 'N10quartz').item(0);
+    LSDn = getElementsByTagName(n10quartz, 'LSDn').item(0);
 
     % Get the content of the 'sumval' element within <LSDn>
     results(k).sum_val = str2double(getTextContent(getElementsByTagName(LSDn, 'sumval').item(0)));
     results(k).sum_int = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_int').item(0)));
     results(k).sum_ext = str2double(getTextContent(getElementsByTagName(LSDn, 'sumdel_ext').item(0)));
+    
+    catch ME
+        % Display error message and skip this calculation
+        fprintf('Error processing landform age for data set %d: %s\n', k, ME.message);
+        results(k).sum_val = NaN;
+        results(k).sum_int = NaN;
+        results(k).sum_ext = NaN; 
+    end
 end
 
 % Access the results for global and local data
