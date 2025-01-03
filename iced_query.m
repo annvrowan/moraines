@@ -135,13 +135,17 @@ end
 close(dbc);
 toc
 
-%% Merge cosmocal input of samples with multiple measurements
+%% Create extra rows for samples with multiple measurements
 
 % New cell arrays to store data
 duplicate_samples = {};
+new_rows = {};
 
 % Input sample data
 data=sample_data;
+
+% Input sites data
+sites = d.sites;
 
 % Loops through 3rd column to check for multiple entries for cosmo input
 for i = 1:size(data, 1)
@@ -153,29 +157,38 @@ for i = 1:size(data, 1)
        % strings
        
        strings = {};
+       new_entries = {}; % To store new rows
+       new_sites_entries = {}; % To store new rows for sites
 
        for j = 1:numel(data{i, 3}) %select cosmocal input
 
             if j ==1 %first measurement
                strings{j} = data{i, 3}{j};
            
-            else %second measurement
+            else %multiple measurements
                parts = strsplit(data{i, 3}{j}, ';');
-               strings{j} = parts{2};         
+               strings{j} = [parts{2}, ';'];
+               new_entries = [new_entries; {data{i, 1}, data{i, 2}, strings{2},data{i, 4:end}}]; % Create new row
+               new_sites_entries = [new_sites_entries; d.sites(i, :)]; 
             end
        end
        
-       new_row = strjoin(strings,'');
-       new_row = strcat(new_row,';');
-       disp(new_row);
-       data{i, 3}=new_row;
-    else
-        %do nothing
+
+       % Update the original data with the first measurement
+       data{i, 3} = strings{1};
+
+       % Insert new rows directly after the current row
+       data = [data(1:i, :); new_entries; data(i+1:end, :)];
+       % Insert new rows directly after the current row in d.sites
+       sites = [sites(1:i, :); new_sites_entries; sites(i+1:end, :)];
+
+    else        
+
     end
 end
 
-
 sample_data = data;
+d.sites = sites;
 
 %% Choose calibration dataset for local production rate calculations
 
@@ -227,13 +240,15 @@ disp("Returned calibrated production rate parameters")
 %message instead.
 
 
-for i  = 15
+for i  = 12:no_sites
     site = unique_sites{i}; %select site
     select = strcmp(sample_data(:, 1), site); %select corresponding site
     site_samples = sample_data(select, :); %select data rows matching site
+
     no_site_samples = size(site_samples,1); %select number of samples within site
     strings = cell(size(site_samples, 1), 1); %empty cell to collect strings for cosmocalinput   
-        
+    
+    %select cosmocalinput per sample
     for a = 1:no_site_samples
         strings{a} = site_samples{a, 3};
     end
@@ -241,19 +256,21 @@ for i  = 15
     % Join strings of samples together
     strings = cellfun(@char, strings, 'UniformOutput', false);
     input = strjoin(strings,' '); %join strings cosmocal input
-
+    
+    
     % Send data to cosmo_calculator
     [ages_global,ages_local] = cosmo_calculator(input,parameters);
     
     %metadata
-    d2.sites = d.sites(select, :); %select rows matching site
+    d2.sites = d.sites(select, :); %select metadata for rows matching site
     rowIndices = find(select); % Find all row indices matching the site
+    
     
        for j = 1:no_site_samples
         sample_data{rowIndices(j), 4} = d2.sites.name(j);   %region
         sample_data{rowIndices(j), 5} = site; %site name
         sample_data{rowIndices(j), 6} = d2.sites.what(j); %landform
-        sample_data{rowIndices(j), 7} = ages_global.sample_ages(j).name; %sample name
+        sample_data{rowIndices(j), 7} = site_samples{j, 2}; %sample name
         sample_data{rowIndices(j), 8} = d2.sites.what_1(j); %type of sample
         sample_data{rowIndices(j), 9} = d2.sites.lat_DD(j); %latitude
         sample_data{rowIndices(j), 10} = d2.sites.lon_DD(j); %longitude
@@ -277,7 +294,7 @@ for i  = 15
     site_data{i,4} = no_site_samples; %number of samples
 
     % Extract the sample names from the structure
-    names = {ages_global.sample_ages.name}; % This will create a cell array of names
+    names = site_samples(:,2); % This will create a cell array of names
     concatenated_names = strjoin(names, ', '); % Join the names with a comma and space
 
     site_data{i,5} = concatenated_names; %sample IDs used for landform calculation
