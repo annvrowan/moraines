@@ -4,21 +4,26 @@
 clear;
 
 % Load data
-data = readtable('../geochron.xlsx','Sheet', 1);
-save('10be.mat', 'data');
+data = readtable('data/iced_10be_upd.xlsx','Sheet', 1);
+save('data/10be.mat', 'data');
 load 10be.mat;
 
-%Assign variables
-site_name = table2cell(data(:,8));
-site_lat = cell2mat(table2cell(data(:,2)));
-site_lon = cell2mat(table2cell(data(:,3)));
-age = cell2mat(table2cell(data(:,5)));
-dtint = cell2mat(table2cell(data(:,6))); %internal uncertainty
-dtext = cell2mat(table2cell(data(:,7))); %external uncertainty
+%% Filter for boulders (i.e. exclude bedrock and erratics) 
+% Create a logical index for rows to keep
+rows_to_keep = contains(data.('type'), 'boulder');
+
+% Filter the data
+data = data(rows_to_keep, :);
+
+%% Assign variables
+site_name = table2cell(data(:,6));
+site_lat = cell2mat(table2cell(data(:,11)));
+site_lon = cell2mat(table2cell(data(:,12)));
+age = cell2mat(table2cell(data(:,18))); %local production
+dtint = cell2mat(table2cell(data(:,19))); %internal uncertainty
+dtext = cell2mat(table2cell(data(:,20))); %external uncertainty
 
 %% Chronologically-ordered plot
-
-
 
 unique_sites = unique(site_name); % Get unique site names
 plotht =1./(length(unique_sites)+4); 
@@ -105,7 +110,7 @@ set(gca,'ycolor','w')
 set(gca,'xtick',[0:10000:50000])
 %set(gca,'xticklabel',{'0','2','4','6','8','10','12','14','16','18','20','22','24'})
 xlabel('Exposure age (yrs)');
-title('Summary camelplots for moraines of the Southern Alps, New Zealand')
+title('Summary camelplots for moraines of the Southern Alps, New Zealand (n=1092)')
 tx = get(gca,'xaxis');
 tx.Exponent=0;
 set(tx,'limits',[0 50000])
@@ -133,18 +138,17 @@ grid on;
 %% This block aggregates data from latitude bins to plot camel diagrams in
 % a correct latitude relationship.
 
-
 % Sort by latitude
 [sorted, sortindex] = sort(site_lat,'descend');
 
 % Define latitude bins
-lats = -46:0.25:-40;
+lats = -46:0.5:-40;
 
 figure('pos',[440    42   574   760]);
 plotht = 1;
 camelHeightScale = 1; % sets height of plots rel to spacing
 axes()
-set(gca,'xlim',[-3000 40000],'ylim',[-46 -40]);
+set(gca,'xlim',[-3000 50000],'ylim',[-46 -40]);
 
 for a = 2:length(lats)
     use = find((site_lat >= lats(a-1)) & (site_lat < lats(a)));
@@ -180,25 +184,27 @@ view(0,90);
 % This makes some y-axis labels that are out of the way on the left
 plats = [-46:1:-40];
 for a = 1:length(plats)
-    text(-400,plats(a),[int2str(plats(a)) '  -'],'fontsize',12,'fontname','helvetica','horizontalalignment','right');
+    text(-400,plats(a),[int2str(plats(a))],'fontsize',12,'fontname','helvetica','horizontalalignment','right');
 end
 
-tt1 = text(-1800,0,'Latitude','fontsize',10,'fontname','helvetica','horizontalalignment','center','rotation',90)
+%Force a y-label manually
+%tt1 = text(-1000,-43,'Latitude','fontsize',10,'fontname','helvetica','horizontalalignment','center','rotation',90)
 
 set(gcf,'color','w')
 set(gca,'box','off')
-set(gca,'ycolor','w')
+set(gca,'ycolor','w') %hides wrong automatic y labels
 set(gca,'gridcolor',[0.5 0.2 0.2])
 set(gca,'ygrid','off','xgrid','on')
-set(gca,'xtick',[0:5000:80000])
+set(gca,'xtick',[0:10000:50000])
 %set(gca,'xticklabel',{'0','2','4','6','8','10','12','14','16','18','20','22','24'})
 set(gca,'ytick',[-46:0.5:-40]);
 set(gca,'yticklabel',{'-60', '-50', '-40', '-30', '-20', '-10', '0', '10', '20', '30', '40', '50', '60', '70'});
-xlabel('Exposure age (ka)');
+xlabel('Exposure age (yrs)');
 ylabel('Latitude (°S)');
-title('Moraines of the Southern Alps')
+title('Boulders on moraines in the Southern Alps (n=1092)')
 tx = get(gca,'xaxis');
-set(tx,'limits',[-1 70000])
+tx.Exponent=0;
+set(tx,'limits',[-1 50000])
 set(gca,'ylim',[-46 -39]);
 
 
